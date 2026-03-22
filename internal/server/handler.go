@@ -23,7 +23,6 @@ func (s *Server) MapHandlers() error {
 		deviceRepo.SetClient(s.mongoClient)
 		log.Printf("✅ MongoDB client set in repositories")
 	}
-	//postgreRepo := repository.NewPostgreRepository()
 	log.Printf("✅ Repositories initialized")
 
 	// Init service
@@ -42,6 +41,5 @@ func (s *Server) MapHandlers() error {
 	route.MapBrandRoutes(s.r, brandHandler)
 	route.MapDeviceRoutes(s.r, deviceHandler)
 	log.Printf("✅ Routes initialized")
-
 	return nil
 }

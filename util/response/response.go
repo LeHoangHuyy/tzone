@@ -17,7 +17,7 @@ type ApiResponse struct {
 }
 
 type ErrorResponse struct {
-	Field string `json:"field"`
+	Field string `json:"field,omitempty"`
 	Error string `json:"error"`
 }
 

@@ -1,11 +1,16 @@
 package dto
 
-// CreateBrandRequest represents the request body for creating a new brand
-type CreateBrandRequest struct {
-	Name string `json:"brand_name" binding:"required,min=1,max=100"`
+import "github.com/LuuDinhTheTai/tzone/internal/model"
+
+// CreateDeviceRequest represents the request body for creating a new device
+type CreateDeviceRequest struct {
+	ModelName      string               `json:"model_name" binding:"required,min=1,max=100"`
+	ImageUrl       string               `json:"imageUrl" binding:"required,min=1,max=100"`
+	Specifications model.Specifications `json:"specifications"`
 }
 
-// UpdateBrandRequest represents the request body for updating a brand
-type UpdateBrandRequest struct {
-	Name string `json:"brand_name" binding:"required,min=1,max=100"`
+// UpdateDeviceRequest represents the request body for updating a device
+type UpdateDeviceRequest struct {
+	ModelName      string               `json:"model_name" binding:"required,min=1,max=100"`
+	Specifications model.Specifications `json:"specifications"`
 }
