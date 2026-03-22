@@ -16,30 +16,29 @@ func (s *Server) MapHandlers() error {
 	}
 
 	// Init repository
-	//brandRepo := repository.NewBrandRepository()
+	brandRepo := repository.NewBrandRepository()
 	deviceRepo := repository.NewDeviceRepository()
 	if s.HasMongoDB() {
-		//brandRepo.SetClient(s.mongoClient)
+		brandRepo.SetClient(s.mongoClient)
 		deviceRepo.SetClient(s.mongoClient)
 		log.Printf("✅ MongoDB client set in repositories")
 	}
-	//postgreRepo := repository.NewPostgreRepository()
 	log.Printf("✅ Repositories initialized")
 
 	// Init service
-	//brandService := service.NewBrandService(brandRepo)
+	brandService := service.NewBrandService(brandRepo)
 	deviceService := service.NewDeviceService(deviceRepo)
 	log.Printf("✅ Services initialized")
 
 	// Init handler
 	commonHandler := handler.NewCommonHandler()
-	//brandHandler := handler.NewBrandHandler(brandService)
+	brandHandler := handler.NewBrandHandler(brandService)
 	deviceHandler := handler.NewDeviceHandler(deviceService)
 	log.Printf("✅ Handlers initialized")
 
 	// Init route
 	route.MapCommonRoutes(s.r, commonHandler)
-	//route.MapBrandRoutes(s.r, brandHandler)
+	route.MapBrandRoutes(s.r, brandHandler)
 	route.MapDeviceRoutes(s.r, deviceHandler)
 	log.Printf("✅ Routes initialized")
 	return nil
