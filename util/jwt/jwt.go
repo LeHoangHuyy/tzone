@@ -14,28 +14,42 @@ var (
 	ErrExpiredToken = errors.New("token has expired")
 )
 
-// GenerateToken generates a new JWT token for a given user ID
-func GenerateToken(userID uuid.UUID) (string, error) {
-	// Secret key from environment
+// GenerateTokenPair generates an access token (30m) and a refresh token (7 days) with a unique JTI
+func GenerateTokenPair(userID uuid.UUID, jti uuid.UUID) (string, string, error) {
 	secretKey := os.Getenv("JWT_SECRET")
 	if secretKey == "" {
-		secretKey = "default_secret_key" // Fallback if not set
+		secretKey = "default_secret_key"
 	}
 
-	// Create claims with standard claims and custom claims
-	claims := jwt.MapClaims{
+	// 1. Generate Access Token (30 mins)
+	atClaims := jwt.MapClaims{
 		"user_id": userID.String(),
-		"exp":     time.Now().Add(1 * time.Hour).Unix(), // 1 hour expiration
+		"exp":     time.Now().Add(30 * time.Minute).Unix(),
 		"iat":     time.Now().Unix(),
 	}
+	atToken := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
+	accessToken, err := atToken.SignedString([]byte(secretKey))
+	if err != nil {
+		return "", "", err
+	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	// 2. Generate Refresh Token (7 days)
+	rtClaims := jwt.MapClaims{
+		"user_id": userID.String(),
+		"jti":     jti.String(),
+		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+	rtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
+	refreshToken, err := rtToken.SignedString([]byte(secretKey))
+	if err != nil {
+		return "", "", err
+	}
 
-	// Sign token
-	return token.SignedString([]byte(secretKey))
+	return accessToken, refreshToken, nil
 }
 
-// ValidateToken parses and validates a JWT token, returning the user ID if valid
+// ValidateToken parses and validates an Access JWT token
 func ValidateToken(tokenString string) (uuid.UUID, error) {
 	secretKey := os.Getenv("JWT_SECRET")
 	if secretKey == "" {
@@ -43,7 +57,6 @@ func ValidateToken(tokenString string) (uuid.UUID, error) {
 	}
 
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-		// Validate signing method
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
@@ -58,7 +71,6 @@ func ValidateToken(tokenString string) (uuid.UUID, error) {
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		// Extract user_id
 		userIDStr, ok := claims["user_id"].(string)
 		if !ok {
 			return uuid.Nil, ErrInvalidToken
@@ -73,4 +85,45 @@ func ValidateToken(tokenString string) (uuid.UUID, error) {
 	}
 
 	return uuid.Nil, ErrInvalidToken
+}
+
+// ValidateRefreshToken parses and validates a Refresh Token and returns UserID and JTI
+func ValidateRefreshToken(tokenString string) (uuid.UUID, uuid.UUID, error) {
+	secretKey := os.Getenv("JWT_SECRET")
+	if secretKey == "" {
+		secretKey = "default_secret_key"
+	}
+
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(secretKey), nil
+	})
+
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return uuid.Nil, uuid.Nil, ErrExpiredToken
+		}
+		return uuid.Nil, uuid.Nil, err
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		userIDStr, ok1 := claims["user_id"].(string)
+		jtiStr, ok2 := claims["jti"].(string)
+
+		if !ok1 || !ok2 {
+			return uuid.Nil, uuid.Nil, ErrInvalidToken
+		}
+
+		userID, err1 := uuid.Parse(userIDStr)
+		jti, err2 := uuid.Parse(jtiStr)
+		if err1 != nil || err2 != nil {
+			return uuid.Nil, uuid.Nil, ErrInvalidToken
+		}
+
+		return userID, jti, nil
+	}
+
+	return uuid.Nil, uuid.Nil, ErrInvalidToken
 }

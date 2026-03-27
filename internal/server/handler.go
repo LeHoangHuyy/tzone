@@ -15,6 +15,7 @@ func (s *Server) MapHandlers() error {
 	mongoDBRepo := repository.NewMongoDbRepository()
 	postgreRepo := repository.NewPostgreRepository(s.db)
 	userRepo := repository.NewUserRepository(postgreRepo.DB)
+	tokenRepo := repository.NewRefreshTokenRepository(postgreRepo.DB)
 	log.Printf("✅ Repositories initialized")
 
 	// Init service
@@ -34,10 +35,9 @@ func (s *Server) MapHandlers() error {
 	route.MapDeviceRoutes(s.r, deviceHandler)
 	log.Printf("✅ Routes initialized")
 	//
-	authService := service.NewAuthService(userRepo)
-
+	authService := service.NewAuthService(userRepo, tokenRepo)
 	authHandler := handler.NewAuthHandler(authService)
-
 	route.MapAuthRoutes(s.r, authHandler)
+
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/LuuDinhTheTai/tzone/internal/service"
 	"github.com/LuuDinhTheTai/tzone/util/jwt"
 	"github.com/LuuDinhTheTai/tzone/util/response"
 
@@ -11,7 +12,7 @@ import (
 )
 
 // JWTAuth middleware verifies the JWT token present in the Authorization header
-func JWTAuth() gin.HandlerFunc {
+func JWTAuth(authService *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get Authorization header
 		authHeader := c.GetHeader("Authorization")
@@ -35,14 +36,29 @@ func JWTAuth() gin.HandlerFunc {
 		// Validate token
 		userID, err := jwt.ValidateToken(tokenString)
 		if err != nil {
-			status := http.StatusUnauthorized
-			msg := "invalid token"
-			
 			if err == jwt.ErrExpiredToken {
-				msg = "token has expired"
+				// Try auto-refresh if client provided Refresh-Token header
+				rtString := c.GetHeader("Refresh-Token")
+				if rtString != "" && authService != nil {
+					newAccessToken, newRefreshToken, newUserID, errRefresh := authService.RefreshToken(rtString)
+					if errRefresh == nil {
+						// Auto refresh succeeded
+						c.Header("X-New-Access-Token", newAccessToken)
+						c.Header("X-New-Refresh-Token", newRefreshToken)
+						
+						// Attach user_id and continue successfully
+						c.Set("user_id", newUserID.String())
+						c.Next()
+						return
+					}
+				}
+				// Refresh failed or no Refresh-Token provided
+				response.Error(c, http.StatusUnauthorized, "token has expired", nil)
+				c.Abort()
+				return
 			}
 			
-			response.Error(c, status, msg, nil)
+			response.Error(c, http.StatusUnauthorized, "invalid token", nil)
 			c.Abort()
 			return
 		}

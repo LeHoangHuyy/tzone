@@ -7,8 +7,12 @@ import (
 )
 
 type User struct {
-	ID           uuid.UUID `db:"id"`
-	Email        string    `db:"email"`
-	PasswordHash string    `db:"password_hash"`
-	CreatedAt    time.Time `db:"created_at"`
+	ID           uuid.UUID `gorm:"primaryKey;type:uuid;column:id"`
+	Email        string    `gorm:"uniqueIndex;not null;column:email"`
+	PasswordHash string    `gorm:"not null;column:password_hash"`
+	CreatedAt    time.Time `gorm:"autoCreateTime;column:created_at"`
+}
+
+func (User) TableName() string {
+	return "users"
 }
