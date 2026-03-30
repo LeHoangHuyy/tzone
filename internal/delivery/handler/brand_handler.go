@@ -3,6 +3,7 @@ package handler
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/LuuDinhTheTai/tzone/internal/dto"
 	"github.com/LuuDinhTheTai/tzone/internal/service"
@@ -183,7 +184,14 @@ func (h *BrandHandler) DeleteBrand(ctx *gin.Context) {
 	err := h.brandService.DeleteBrand(ctx.Request.Context(), id)
 	if err != nil {
 		log.Printf("❌ Failed to delete brand: %v", err)
-		response.Error(ctx, http.StatusInternalServerError, "Failed to delete brand", []response.ErrorResponse{
+
+		// Check to see if the error is due to Devices remaining
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "cannot delete brand because it still contains") {
+			statusCode = http.StatusBadRequest // Trả về lỗi 400 nếu vi phạm logic
+		}
+
+		response.Error(ctx, statusCode, "Failed to delete brand", []response.ErrorResponse{
 			{Field: "server", Error: err.Error()},
 		})
 		return

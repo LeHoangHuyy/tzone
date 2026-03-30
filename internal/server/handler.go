@@ -17,7 +17,7 @@ func (s *Server) MapHandlers() error {
 
 	// Init repository
 	brandRepo := repository.NewBrandRepository()
-	deviceRepo := repository.NewDeviceRepository()
+	deviceRepo := repository.NewBrandRepository()
 	if s.HasMongoDB() {
 		brandRepo.SetClient(s.mongoClient)
 		deviceRepo.SetClient(s.mongoClient)

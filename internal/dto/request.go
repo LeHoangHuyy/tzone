@@ -14,6 +14,7 @@ type UpdateBrandRequest struct {
 
 // CreateDeviceRequest represents the request body for creating a new device
 type CreateDeviceRequest struct {
+	BrandID        string               `json:"brand_id" binding:"required"`
 	ModelName      string               `json:"model_name" binding:"required,min=1,max=100"`
 	ImageUrl       string               `json:"imageUrl" binding:"required,min=1,max=100"`
 	Specifications model.Specifications `json:"specifications"`
@@ -21,6 +22,7 @@ type CreateDeviceRequest struct {
 
 // UpdateDeviceRequest represents the request body for updating a device
 type UpdateDeviceRequest struct {
+	BrandID        string               `json:"brand_id" binding:"required"`
 	ModelName      string               `json:"model_name" binding:"required,min=1,max=100"`
 	Specifications model.Specifications `json:"specifications"`
 }
