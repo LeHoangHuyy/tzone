@@ -8,7 +8,6 @@ import (
 	"github.com/LuuDinhTheTai/tzone/internal/model"
 	"github.com/LuuDinhTheTai/tzone/internal/repository"
 	"github.com/LuuDinhTheTai/tzone/internal/service"
-	// "github.com/supabase-community/postgrest-go"
 )
 
 func (s *Server) MapHandlers() error {
@@ -17,9 +16,6 @@ func (s *Server) MapHandlers() error {
 		log.Println("⚠️ MongoDB is not available, brand and device routes will not work properly")
 	}
 
-	// Init repository
-	mongoDBRepo := repository.NewMongoDbRepository()
-	
 	// AutoMigrate missing tables (Users, RefreshTokens, and the newly added RBAC tables)
 	s.db.AutoMigrate(
 		&model.User{},
@@ -31,16 +27,12 @@ func (s *Server) MapHandlers() error {
 		&model.Permission{},
 		&model.RolePermission{},
 	)
-	
+
+	// Init repository
 	userRepo := repository.NewUserRepository(s.db)
 	tokenRepo := repository.NewRefreshTokenRepository(s.db)
 	permissionRepo := repository.NewPermissionRepository(s.db)
-	log.Printf("✅ Repositories initialized")
 
-	// Init service
-	brandService := service.NewBrandService(mongoDBRepo)
-	deviceService := service.NewDeviceService(mongoDBRepo)
-	permissionService := service.NewPermissionService(permissionRepo)
 	brandRepo := repository.NewBrandRepository()
 	deviceRepo := repository.NewBrandRepository()
 	if s.HasMongoDB() {
@@ -53,6 +45,7 @@ func (s *Server) MapHandlers() error {
 	// Init service
 	brandService := service.NewBrandService(brandRepo)
 	deviceService := service.NewDeviceService(deviceRepo)
+	permissionService := service.NewPermissionService(permissionRepo)
 	log.Printf("✅ Services initialized")
 
 	// Init handler
@@ -66,7 +59,8 @@ func (s *Server) MapHandlers() error {
 	route.MapBrandRoutes(s.r, brandHandler)
 	route.MapDeviceRoutes(s.r, deviceHandler)
 	log.Printf("✅ Routes initialized")
-	//
+
+	// Init auth service and routes
 	authService := service.NewAuthService(userRepo, tokenRepo)
 	authHandler := handler.NewAuthHandler(authService)
 	route.MapAuthRoutes(s.r, authHandler)
