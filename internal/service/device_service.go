@@ -15,6 +15,50 @@ type DeviceService struct {
 	mongoDbRepo *repository.BrandRepository
 }
 
+func (s *DeviceService) addDeviceToBrand(ctx context.Context, brandID string, device *model.Device) error {
+	objID, err := bson.ObjectIDFromHex(brandID)
+	if err != nil {
+		return fmt.Errorf("invalid brand ID format: %w", err)
+	}
+
+	if err := s.mongoDbRepo.AddDeviceToBrand(ctx, objID, device); err != nil {
+		return fmt.Errorf("failed to add device to brand: %w", err)
+	}
+
+	return nil
+}
+
+func (s *DeviceService) updateDeviceInBrand(ctx context.Context, brandID string, device *model.Device) error {
+	objID, err := bson.ObjectIDFromHex(brandID)
+	if err != nil {
+		return fmt.Errorf("invalid brand ID format: %w", err)
+	}
+
+	if err := s.mongoDbRepo.UpdateDeviceInBrand(ctx, objID, device); err != nil {
+		return fmt.Errorf("failed to update device in brand doc: %w", err)
+	}
+
+	return nil
+}
+
+func (s *DeviceService) removeDeviceFromBrand(ctx context.Context, brandID string, deviceID string) error {
+	objBrandID, err := bson.ObjectIDFromHex(brandID)
+	if err != nil {
+		return fmt.Errorf("invalid brand ID format: %w", err)
+	}
+
+	objDeviceID, err := bson.ObjectIDFromHex(deviceID)
+	if err != nil {
+		return fmt.Errorf("invalid device ID format: %w", err)
+	}
+
+	if err := s.mongoDbRepo.RemoveDeviceFromBrand(ctx, objBrandID, objDeviceID); err != nil {
+		return fmt.Errorf("failed to remove device from brand: %w", err)
+	}
+
+	return nil
+}
+
 func NewDeviceService(mongoDbRepo *repository.BrandRepository) *DeviceService {
 	return &DeviceService{
 		mongoDbRepo: mongoDbRepo,
@@ -25,11 +69,6 @@ func NewDeviceService(mongoDbRepo *repository.BrandRepository) *DeviceService {
 func (s *DeviceService) CreateDevice(ctx context.Context, req dto.CreateDeviceRequest) (*dto.DeviceResponse, error) {
 	log.Printf("🔄 Creating device: %s", req.ModelName)
 
-	brandID, err := bson.ObjectIDFromHex(req.BrandID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid brand ID format %w", err)
-	}
-
 	device := &model.Device{
 		ID:             bson.NewObjectID(),
 		ModelName:      req.ModelName,
@@ -37,9 +76,8 @@ func (s *DeviceService) CreateDevice(ctx context.Context, req dto.CreateDeviceRe
 		Specifications: req.Specifications,
 	}
 
-	err = s.mongoDbRepo.AddDeviceToBrand(ctx, brandID, device)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add device to brand: %w", err)
+	if err := s.addDeviceToBrand(ctx, req.BrandID, device); err != nil {
+		return nil, err
 	}
 
 	response := &dto.DeviceResponse{
@@ -114,11 +152,6 @@ func (s *DeviceService) UpdateDevice(ctx context.Context, id string, req dto.Upd
 		return nil, fmt.Errorf("device not found: %w", err)
 	}
 
-	newBrandID, err := bson.ObjectIDFromHex(req.BrandID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid brand ID format %w", err)
-	}
-
 	deviceToUpdate := &model.Device{
 		ID:             oldDevice.ID,
 		ModelName:      req.ModelName,
@@ -127,20 +160,18 @@ func (s *DeviceService) UpdateDevice(ctx context.Context, id string, req dto.Upd
 
 	// Process array data inside brand
 	if oldBrandIDHex != req.BrandID {
-		oldBrandObjID, _ := bson.ObjectIDFromHex(oldBrandIDHex)
-
 		// Remove device from old brand
-		if err := s.mongoDbRepo.RemoveDeviceFromBrand(ctx, oldBrandObjID, oldDevice.ID); err != nil {
+		if err := s.removeDeviceFromBrand(ctx, oldBrandIDHex, oldDevice.ID.Hex()); err != nil {
 			return nil, fmt.Errorf("failed to remove device from old brand: %w", err)
 		}
 		// Add a device to new brand
-		if err := s.mongoDbRepo.AddDeviceToBrand(ctx, newBrandID, deviceToUpdate); err != nil {
+		if err := s.addDeviceToBrand(ctx, req.BrandID, deviceToUpdate); err != nil {
 			return nil, fmt.Errorf("failed to add device to new brand: %w", err)
 		}
 	} else {
 		// Only update information in the current brand
-		if err := s.mongoDbRepo.UpdateDeviceInBrand(ctx, newBrandID, deviceToUpdate); err != nil {
-			return nil, fmt.Errorf("failed to update device in brand doc: %w", err)
+		if err := s.updateDeviceInBrand(ctx, req.BrandID, deviceToUpdate); err != nil {
+			return nil, err
 		}
 	}
 
@@ -152,7 +183,7 @@ func (s *DeviceService) UpdateDevice(ctx context.Context, id string, req dto.Upd
 		Specifications: deviceToUpdate.Specifications,
 	}
 
-	log.Printf("✅ Brand updated successfully: %s", response.ModelName)
+	log.Printf("✅ Device updated successfully: %s", response.ModelName)
 	return response, nil
 }
 
@@ -166,11 +197,8 @@ func (s *DeviceService) DeleteDevice(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to find device before deleting: %w", err)
 	}
 
-	brandObjID, _ := bson.ObjectIDFromHex(brandIDHex)
-
 	// Remove device from brand's array
-	err = s.mongoDbRepo.RemoveDeviceFromBrand(ctx, brandObjID, device.ID)
-	if err != nil {
+	if err := s.removeDeviceFromBrand(ctx, brandIDHex, device.ID.Hex()); err != nil {
 		return fmt.Errorf("failed to remove deleted device from brand: %w", err)
 	}
 
