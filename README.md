@@ -233,6 +233,13 @@ POSTGRES_DSN=postgres://postgres:postgres@localhost:5432/tzone?sslmode=disable
 # 🌐 Supabase hosted API (tuỳ chọn)
 SUPABASE_API_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-api-key-here
+
+# 🛡️ API rate limit (tuỳ chọn)
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_API_RPM=120
+RATE_LIMIT_API_BURST=30
+RATE_LIMIT_AUTH_RPM=20
+RATE_LIMIT_AUTH_BURST=5
 ```
 
 **Lưu ý:**

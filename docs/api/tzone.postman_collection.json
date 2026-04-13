@@ -613,6 +613,85 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Rate Limit",
+      "item": [
+        {
+          "name": "Burst Brands (Expect 429 in Runner)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const maxCalls = parseInt(pm.collectionVariables.get('rateLimitMaxCalls') || '40', 10);",
+                  "let runCount = parseInt(pm.collectionVariables.get('rateLimitRunCount') || '0', 10);",
+                  "if (Number.isNaN(runCount) || runCount < 0 || runCount >= maxCalls) {",
+                  "  pm.collectionVariables.set('rateLimitRunCount', '0');",
+                  "  pm.collectionVariables.set('rateLimit429Count', '0');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const maxCalls = parseInt(pm.collectionVariables.get('rateLimitMaxCalls') || '40', 10);",
+                  "let runCount = parseInt(pm.collectionVariables.get('rateLimitRunCount') || '0', 10);",
+                  "let hit429 = parseInt(pm.collectionVariables.get('rateLimit429Count') || '0', 10);",
+                  "runCount += 1;",
+                  "if (pm.response.code === 429) {",
+                  "  hit429 += 1;",
+                  "}",
+                  "pm.collectionVariables.set('rateLimitRunCount', String(runCount));",
+                  "pm.collectionVariables.set('rateLimit429Count', String(hit429));",
+                  "pm.test('Status is successful or rate-limited during burst', function () {",
+                  "  pm.expect([200, 429]).to.include(pm.response.code);",
+                  "});",
+                  "if (runCount < maxCalls) {",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.test('At least one response is rate-limited (429)', function () {",
+                  "    pm.expect(hit429).to.be.above(0);",
+                  "  });",
+                  "  postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/brands?page=1&limit=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "brands"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Run this request from Collection Runner. It loops until rateLimitMaxCalls and asserts at least one 429 response."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -635,6 +714,18 @@
     {
       "key": "deviceId",
       "value": ""
+    },
+    {
+      "key": "rateLimitMaxCalls",
+      "value": "40"
+    },
+    {
+      "key": "rateLimitRunCount",
+      "value": "0"
+    },
+    {
+      "key": "rateLimit429Count",
+      "value": "0"
     }
   ]
 }

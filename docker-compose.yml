@@ -58,6 +58,11 @@ services:
       SERVER_PORT: 8080
       MONGODB_URL: mongodb://mongo:27017/?directConnection=true
       POSTGRES_DSN: postgres://postgres:postgres@postgres:5432/tzone?sslmode=disable
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_API_RPM: "120"
+      RATE_LIMIT_API_BURST: "30"
+      RATE_LIMIT_AUTH_RPM: "20"
+      RATE_LIMIT_AUTH_BURST: "5"
     ports:
       - "8080:8080"
     depends_on:

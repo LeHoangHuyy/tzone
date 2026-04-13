@@ -9,6 +9,7 @@ import (
 
 func MapBrandRoutes(r *gin.Engine, brandHandler *handler.BrandHandler, permissionService *service.PermissionService) {
 	brandGroup := r.Group("/api/v1/brands")
+	brandGroup.Use(middleware.APIRateLimit())
 	{
 		brandGroup.GET("", brandHandler.GetAllBrands)
 		brandGroup.GET("/:id", brandHandler.GetBrandById)

@@ -9,6 +9,7 @@ import (
 
 func MapDeviceRoutes(r *gin.Engine, deviceHandler *handler.DeviceHandler, permissionService *service.PermissionService) {
 	deviceGroup := r.Group("/api/v1/devices")
+	deviceGroup.Use(middleware.APIRateLimit())
 	{
 		deviceGroup.GET("", deviceHandler.GetAllDevices)
 		deviceGroup.GET("/:id", deviceHandler.GetDeviceById)
