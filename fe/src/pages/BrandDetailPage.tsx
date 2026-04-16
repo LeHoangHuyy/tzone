@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { brandsApi } from '../api/brands';
+import { devicesApi } from '../api/devices';
 import type { Brand, Device } from '../types';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { ChevronRight, Smartphone, ArrowLeft } from 'lucide-react';
@@ -8,14 +9,30 @@ import { ChevronRight, Smartphone, ArrowLeft } from 'lucide-react';
 export default function BrandDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [brand, setBrand] = useState<Brand | null>(null);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setBrand(null);
+      setDevices([]);
+      return;
+    }
+
     setLoading(true);
-    brandsApi.getById(id)
-      .then(({ data }) => setBrand(data.data || null))
-      .catch(() => setBrand(null))
+
+    Promise.all([
+      brandsApi.getById(id),
+      devicesApi.getByBrandId(id, 1, 100),
+    ])
+      .then(([brandRes, devicesRes]) => {
+        setBrand(brandRes.data.data || null);
+        setDevices(devicesRes.data.data?.devices || []);
+      })
+      .catch(() => {
+        setBrand(null);
+        setDevices([]);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -32,7 +49,6 @@ export default function BrandDetailPage() {
     );
   }
 
-  const devices: Device[] = brand.devices || [];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

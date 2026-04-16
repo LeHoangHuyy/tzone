@@ -142,6 +142,41 @@ func (s *DeviceService) GetAllDevices(ctx context.Context, page int, limit int) 
 	return response, nil
 }
 
+// GetDevicesByBrandId retrieves paginated devices for a specific brand
+func (s *DeviceService) GetDevicesByBrandId(ctx context.Context, brandID string, page int, limit int) (*dto.DeviceListResponse, error) {
+	log.Printf("🔄 Fetching devices by brand ID: %s (page=%d, limit=%d)", brandID, page, limit)
+
+	objBrandID, err := bson.ObjectIDFromHex(brandID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid brand ID format: %w", err)
+	}
+
+	devices, total, err := s.mongoDbRepo.GetDevicesByBrandID(ctx, objBrandID, page, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get devices by brand ID: %w", err)
+	}
+
+	var deviceResponses []dto.DeviceResponse
+	for _, device := range devices {
+		deviceResponses = append(deviceResponses, dto.DeviceResponse{
+			ID:             device.Device.ID.Hex(),
+			BrandID:        device.BrandID.Hex(),
+			ModelName:      device.Device.ModelName,
+			ImageUrl:       device.Device.ImageUrl,
+			Specifications: device.Device.Specifications,
+		})
+	}
+
+	response := &dto.DeviceListResponse{
+		Devices:    deviceResponses,
+		Total:      int(total),
+		Pagination: buildPaginationMeta(total, page, limit),
+	}
+
+	log.Printf("✅ Retrieved %d devices for brand %s", response.Total, brandID)
+	return response, nil
+}
+
 // UpdateDevice updates existing device and handles brand changing
 func (s *DeviceService) UpdateDevice(ctx context.Context, id string, req dto.UpdateDeviceRequest) (*dto.DeviceResponse, error) {
 	log.Printf("🔄 Updating device with ID: %s", id)

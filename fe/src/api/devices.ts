@@ -16,6 +16,11 @@ export const devicesApi = {
   getById: (id: string) =>
     client.get<ApiResponse<Device>>(`/api/v1/devices/${id}`),
 
+  getByBrandId: (brandId: string, page = 1, limit = 10) =>
+    client.get<ApiResponse<DeviceListResponse>>(`/api/v1/devices/brand/${brandId}`, {
+      params: { page, limit },
+    }),
+
   create: (data: CreateDeviceRequest) =>
     client.post<ApiResponse<Device>>('/api/v1/devices', data),
 

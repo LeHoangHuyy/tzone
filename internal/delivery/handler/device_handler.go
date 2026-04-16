@@ -124,6 +124,52 @@ func (h *DeviceHandler) GetAllDevices(ctx *gin.Context) {
 	response.Success(ctx, http.StatusOK, "Devices retrieved successfully", devices)
 }
 
+// GetDevicesByBrandId handles GET request to retrieve devices by brand ID
+// @Summary Get devices by brand ID
+// @Description Get a paginated list of devices for a specific brand
+// @Tags devices
+// @Accept json
+// @Produce json
+// @Param brandId path string true "Brand ID"
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page (max 100)" default(10)
+// @Success 200 {object} response.ApiResponse{data=dto.DeviceListResponse}
+// @Failure 400 {object} response.ApiResponse
+// @Failure 500 {object} response.ApiResponse
+// @Router /api/v1/devices/brand/{brandId} [get]
+func (h *DeviceHandler) GetDevicesByBrandId(ctx *gin.Context) {
+	brandID := ctx.Param("brandId")
+	if brandID == "" {
+		log.Printf("❌ Brand ID is required")
+		response.Error(ctx, http.StatusBadRequest, "Brand ID is required", []response.ErrorResponse{
+			{Field: "brandId", Error: "brandId parameter is missing"},
+		})
+		return
+	}
+
+	var pagination dto.PaginationQuery
+	if err := ctx.ShouldBindQuery(&pagination); err != nil {
+		log.Printf("❌ Invalid pagination query: %v", err)
+		response.Error(ctx, http.StatusBadRequest, "Invalid pagination query", []response.ErrorResponse{
+			{Field: "query", Error: err.Error()},
+		})
+		return
+	}
+
+	pagination.Normalize()
+
+	devices, err := h.deviceService.GetDevicesByBrandId(ctx.Request.Context(), brandID, pagination.Page, pagination.Limit)
+	if err != nil {
+		log.Printf("❌ Failed to get devices by brand ID: %v", err)
+		response.Error(ctx, http.StatusInternalServerError, "Failed to retrieve devices by brand", []response.ErrorResponse{
+			{Field: "server", Error: err.Error()},
+		})
+		return
+	}
+
+	response.Success(ctx, http.StatusOK, "Devices retrieved successfully", devices)
+}
+
 // UpdateDevice handles PUT request to update a device
 // @Summary Update a device
 // @Description Update device information by ID

@@ -315,3 +315,68 @@ func (r *BrandRepository) GetAllDevices(ctx context.Context, page int, limit int
 	log.Printf("✅ Retrieved %d devices across all brands", len(devices))
 	return devices, total, nil
 }
+
+// GetDevicesByBrandID retrieves paginated devices from a single brand document
+func (r *BrandRepository) GetDevicesByBrandID(ctx context.Context, brandID bson.ObjectID, page int, limit int) ([]DeviceWithBrand, int64, error) {
+	collection := r.GetBrandCollection()
+	skip := int64((page - 1) * limit)
+
+	countPipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"_id": brandID}}},
+		{{Key: "$unwind", Value: "$devices"}},
+		{{Key: "$count", Value: "total"}},
+	}
+
+	countCursor, err := collection.Aggregate(ctx, countPipeline)
+	if err != nil {
+		log.Printf("❌ Error counting devices by brand: %v", err)
+		return nil, 0, fmt.Errorf("failed to count devices by brand: %w", err)
+	}
+	defer func() {
+		if err := countCursor.Close(ctx); err != nil {
+			log.Printf("⚠️ Error closing count cursor: %v", err)
+		}
+	}()
+
+	var countResults []struct {
+		Total int64 `bson:"total"`
+	}
+	if err := countCursor.All(ctx, &countResults); err != nil {
+		log.Printf("❌ Error decoding device count by brand: %v", err)
+		return nil, 0, fmt.Errorf("failed to decode device count by brand: %w", err)
+	}
+
+	var total int64
+	if len(countResults) > 0 {
+		total = countResults[0].Total
+	}
+
+	dataPipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"_id": brandID}}},
+		{{Key: "$unwind", Value: "$devices"}},
+		{{Key: "$project", Value: bson.M{"brand_id": "$_id", "device": "$devices"}}},
+		{{Key: "$sort", Value: bson.M{"device._id": -1}}},
+		{{Key: "$skip", Value: skip}},
+		{{Key: "$limit", Value: int64(limit)}},
+	}
+
+	cursor, err := collection.Aggregate(ctx, dataPipeline)
+	if err != nil {
+		log.Printf("❌ Error fetching devices by brand: %v", err)
+		return nil, 0, fmt.Errorf("failed to fetch devices by brand: %w", err)
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("⚠️ Error closing cursor: %v", err)
+		}
+	}()
+
+	var devices []DeviceWithBrand
+	if err = cursor.All(ctx, &devices); err != nil {
+		log.Printf("❌ Error decoding devices by brand: %v", err)
+		return nil, 0, fmt.Errorf("failed to decode devices by brand: %w", err)
+	}
+
+	log.Printf("✅ Retrieved %d devices for brand %s", len(devices), brandID.Hex())
+	return devices, total, nil
+}
