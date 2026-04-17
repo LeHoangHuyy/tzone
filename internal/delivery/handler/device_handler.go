@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
 	"github.com/LuuDinhTheTai/tzone/internal/dto"
+	"github.com/LuuDinhTheTai/tzone/internal/model"
 	"github.com/LuuDinhTheTai/tzone/internal/service"
+	"github.com/LuuDinhTheTai/tzone/util/handle_uploads"
 	"github.com/LuuDinhTheTai/tzone/util/response"
 	"github.com/gin-gonic/gin"
 )
@@ -22,24 +25,54 @@ func NewDeviceHandler(deviceService *service.DeviceService) *DeviceHandler {
 
 // CreateDevice  handles POST request to create a new device
 // @Summary Create a new device
-// @Description Create a new device with the provided name
+// @Description Create a new device with the provided name and image
 // @Tags devices
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
-// @Param device body dto.CreateDeviceRequest true "Device information"
+// @Param brand_id formData string true "Brand ID"
+// @Param model_name formData string true "Model Name"
+// @Param image formData file true "Device Image"
+// @Param specifications formData string false "Specifications (JSON string)"
 // @Success 201 {object} response.ApiResponse{data=dto.DeviceResponse}
 // @Failure 400 {object} response.ApiResponse
 // @Failure 500 {object} response.ApiResponse
 // @Router /api/v1/devices [post]
 func (h *DeviceHandler) CreateDevice(ctx *gin.Context) {
-	var req dto.CreateDeviceRequest
+	var formReq dto.CreateDeviceFormRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		log.Printf("❌ Invalid request body: %v", err)
-		response.Error(ctx, http.StatusBadRequest, "Invalid request body", []response.ErrorResponse{
-			{Field: "", Error: err.Error()},
+	if err := ctx.ShouldBind(&formReq); err != nil {
+		log.Printf("❌ Invalid request form data: %v", err)
+		response.Error(ctx, http.StatusBadRequest, "Invalid request form data", []response.ErrorResponse{
+			{Field: "form", Error: err.Error()},
 		})
 		return
+	}
+
+	imageUrl, err := handle_uploads.SaveImage(ctx, formReq.Image)
+	if err != nil {
+		log.Printf("❌ Failed to save image: %v", err)
+		response.Error(ctx, http.StatusInternalServerError, "Failed to upload image", []response.ErrorResponse{
+			{Field: "image", Error: err.Error()},
+		})
+		return
+	}
+
+	var specs model.Specifications
+	if formReq.Specifications != "" {
+		if err := json.Unmarshal([]byte(formReq.Specifications), &specs); err != nil {
+			log.Printf("❌ Invalid specifications JSON format: %v", err)
+			response.Error(ctx, http.StatusBadRequest, "Invalid specifications JSON format", []response.ErrorResponse{
+				{Field: "specifications", Error: err.Error()},
+			})
+			return
+		}
+	}
+
+	req := dto.CreateDeviceRequest{
+		BrandID:        formReq.BrandID,
+		ModelName:      formReq.ModelName,
+		ImageUrl:       imageUrl,
+		Specifications: specs,
 	}
 
 	device, err := h.deviceService.CreateDevice(ctx.Request.Context(), req)
@@ -174,10 +207,13 @@ func (h *DeviceHandler) GetDevicesByBrandId(ctx *gin.Context) {
 // @Summary Update a device
 // @Description Update device information by ID
 // @Tags devices
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
 // @Param id path string true "Device ID"
-// @Param device body dto.UpdateDeviceRequest true "Updated device information"
+// @Param brand_id formData string true "Brand ID"
+// @Param model_name formData string true "Model Name"
+// @Param image formData file false "Device Image (Optional)"
+// @Param specifications formData string false "Specifications (JSON string)"
 // @Success 200 {object} response.ApiResponse{data=dto.DeviceResponse}
 // @Failure 400 {object} response.ApiResponse
 // @Failure 404 {object} response.ApiResponse
@@ -194,14 +230,42 @@ func (h *DeviceHandler) UpdateDevice(ctx *gin.Context) {
 		return
 	}
 
-	var req dto.UpdateDeviceRequest
+	var formReq dto.UpdateDeviceFormRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		log.Printf("❌ Invalid request body: %v", err)
-		response.Error(ctx, http.StatusBadRequest, "Invalid request body", []response.ErrorResponse{
-			{Field: "", Error: err.Error()},
+	if err := ctx.ShouldBind(&formReq); err != nil {
+		log.Printf("❌ Invalid request form data: %v", err)
+		response.Error(ctx, http.StatusBadRequest, "Invalid request form data", []response.ErrorResponse{
+			{Field: "form", Error: err.Error()},
 		})
 		return
+	}
+
+	var specs model.Specifications
+	if formReq.Specifications != "" {
+		if err := json.Unmarshal([]byte(formReq.Specifications), &specs); err != nil {
+			log.Printf("❌ Invalid specifications JSON format: %v", err)
+			response.Error(ctx, http.StatusBadRequest, "Invalid specifications JSON format", []response.ErrorResponse{
+				{Field: "specifications", Error: err.Error()},
+			})
+		}
+	}
+
+	req := dto.UpdateDeviceRequest{
+		BrandID:        formReq.BrandID,
+		ModelName:      formReq.ModelName,
+		Specifications: specs,
+	}
+
+	if formReq.Image != nil {
+		imageUrl, err := handle_uploads.SaveImage(ctx, formReq.Image)
+		if err != nil {
+			log.Printf("❌ Failed to save image: %v", err)
+			response.Error(ctx, http.StatusInternalServerError, "Failed to upload image", []response.ErrorResponse{
+				{Field: "image", Error: err.Error()},
+			})
+			return
+		}
+		req.ImageUrl = imageUrl
 	}
 
 	device, err := h.deviceService.UpdateDevice(ctx.Request.Context(), id, req)

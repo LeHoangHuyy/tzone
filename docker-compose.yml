@@ -70,6 +70,8 @@ services:
         condition: service_healthy
       mongo-seed:
         condition: service_completed_successfully
+    volumes:
+      - ./uploads:/app/uploads
 
   fe:
     build:

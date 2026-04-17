@@ -187,9 +187,15 @@ func (s *DeviceService) UpdateDevice(ctx context.Context, id string, req dto.Upd
 		return nil, fmt.Errorf("device not found: %w", err)
 	}
 
+	imageUrl := oldDevice.ImageUrl
+	if req.ImageUrl != "" {
+		imageUrl = req.ImageUrl
+	}
+
 	deviceToUpdate := &model.Device{
 		ID:             oldDevice.ID,
 		ModelName:      req.ModelName,
+		ImageUrl:       imageUrl,
 		Specifications: req.Specifications,
 	}
 

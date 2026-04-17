@@ -1,6 +1,10 @@
 package dto
 
-import "github.com/LuuDinhTheTai/tzone/internal/model"
+import (
+	"mime/multipart"
+
+	"github.com/LuuDinhTheTai/tzone/internal/model"
+)
 
 const (
 	DefaultPage  = 1
@@ -59,5 +63,22 @@ type CreateDeviceRequest struct {
 type UpdateDeviceRequest struct {
 	BrandID        string               `json:"brand_id" binding:"required"`
 	ModelName      string               `json:"model_name" binding:"required,min=1,max=100"`
+	ImageUrl       string               `json:"imageUrl" binding:"required,min=1,max=100"`
 	Specifications model.Specifications `json:"specifications"`
+}
+
+// CreateDeviceFormRequest represents the form data for creating a new device
+type CreateDeviceFormRequest struct {
+	BrandID        string                `form:"brand_id" binding:"required"`
+	ModelName      string                `form:"model_name" binding:"required,min=1,max=100"`
+	Image          *multipart.FileHeader `form:"image" binding:"required"`
+	Specifications string                `form:"specifications"`
+}
+
+// UpdateDeviceFormRequest represents the form data for updating a device
+type UpdateDeviceFormRequest struct {
+	BrandID        string                `form:"brand_id" binding:"required"`
+	ModelName      string                `form:"model_name" binding:"required,min=1,max=100"`
+	Image          *multipart.FileHeader `form:"image"`
+	Specifications string                `form:"specifications"`
 }
