@@ -41,12 +41,66 @@ services:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: Cluster0
       MONGO_COLLECTION: brands
-      SEED_FILE: /data/phone.json
+      SEED_FILE: /data/phoneExample.json
+      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-http://localhost:9000}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tzone-assets}
     volumes:
-      - ./phone.json:/data/phone.json:ro
+      - ./phoneExample.json:/data/phoneExample.json:ro
     depends_on:
       mongo:
         condition: service_healthy
+      minio-media-seed:
+        condition: service_completed_successfully
+    restart: "no"
+
+  minio:
+    image: minio/minio:latest
+    container_name: tzone-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: tzone-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tzone-assets}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set tzone http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do sleep 1; done;
+      mc mb -p tzone/$${MINIO_BUCKET} || true;
+      mc anonymous set download tzone/$${MINIO_BUCKET};
+      "
+    restart: "no"
+
+  minio-media-seed:
+    image: minio/mc:latest
+    container_name: tzone-minio-media-seed
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tzone-assets}
+    volumes:
+      - ./media:/media:ro
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set tzone http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mirror --overwrite /media tzone/$${MINIO_BUCKET}/media;
+      "
     restart: "no"
 
   api:
@@ -64,6 +118,12 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: ${SMTP_FROM}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tzone-assets}
+      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-http://localhost:9000}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
       RATE_LIMIT_ENABLED: "true"
       RATE_LIMIT_API_RPM: "120"
       RATE_LIMIT_API_BURST: "30"
@@ -74,10 +134,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       mongo-seed:
         condition: service_completed_successfully
-    volumes:
-      - ./uploads:/app/uploads
 
   fe:
     build:
@@ -94,5 +154,6 @@ services:
 volumes:
   postgres_data:
   mongo_data:
+  minio_data:
 
 

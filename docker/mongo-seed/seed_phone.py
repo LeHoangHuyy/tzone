@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import time
@@ -11,9 +10,11 @@ from pymongo.errors import PyMongoError
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongo:27017")
 MONGO_DB = os.getenv("MONGO_DB", "Cluster0")
 MONGO_COLLECTION = os.getenv("MONGO_COLLECTION", "brands")
-SEED_FILE = Path(os.getenv("SEED_FILE", "/data/phone.json"))
+SEED_FILE = Path(os.getenv("SEED_FILE", "/data/phoneExample.json"))
 MAX_ATTEMPTS = int(os.getenv("MONGO_SEED_MAX_ATTEMPTS", "30"))
 SLEEP_SECONDS = float(os.getenv("MONGO_SEED_SLEEP_SECONDS", "2"))
+MINIO_PUBLIC_BASE_URL = os.getenv("MINIO_PUBLIC_BASE_URL", "http://localhost:9000").rstrip("/")
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "tzone-assets").strip()
 
 
 def connect() -> MongoClient:
@@ -32,6 +33,21 @@ def connect() -> MongoClient:
     raise RuntimeError(f"failed to connect to MongoDB after {MAX_ATTEMPTS} attempts") from last_error
 
 
+def normalize_image_url(image_url: str | None) -> str:
+    if not image_url:
+        return ""
+
+    raw = str(image_url).strip()
+    if raw.lower().startswith("http://") or raw.lower().startswith("https://"):
+        return raw
+
+    normalized_path = raw.replace("\\", "/").lstrip("/")
+    if not normalized_path:
+        return ""
+
+    return f"{MINIO_PUBLIC_BASE_URL}/{MINIO_BUCKET}/{normalized_path}"
+
+
 def load_seed_data() -> list[dict]:
     if not SEED_FILE.exists():
         raise FileNotFoundError(f"seed file not found: {SEED_FILE}")
@@ -40,7 +56,17 @@ def load_seed_data() -> list[dict]:
         data = json_util.loads(handle.read())
 
     if not isinstance(data, list):
-        raise ValueError("phone.json must contain a JSON array of brand documents")
+        raise ValueError("seed file must contain a JSON array of brand documents")
+
+    for brand in data:
+        devices = brand.get("devices")
+        if not isinstance(devices, list):
+            continue
+
+        for device in devices:
+            if not isinstance(device, dict):
+                continue
+            device["imageUrl"] = normalize_image_url(device.get("imageUrl"))
 
     return data
 

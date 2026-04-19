@@ -48,7 +48,7 @@ func (h *DeviceHandler) CreateDevice(ctx *gin.Context) {
 		return
 	}
 
-	imageUrl, err := handle_uploads.SaveImage(ctx, formReq.Image)
+	imageUrl, err := handle_uploads.SaveImage(formReq.Image)
 	if err != nil {
 		log.Printf("❌ Failed to save image: %v", err)
 		response.Error(ctx, http.StatusInternalServerError, "Failed to upload image", []response.ErrorResponse{
@@ -294,7 +294,7 @@ func (h *DeviceHandler) UpdateDevice(ctx *gin.Context) {
 	}
 
 	if formReq.Image != nil {
-		imageUrl, err := handle_uploads.SaveImage(ctx, formReq.Image)
+		imageUrl, err := handle_uploads.SaveImage(formReq.Image)
 		if err != nil {
 			log.Printf("❌ Failed to save image: %v", err)
 			response.Error(ctx, http.StatusInternalServerError, "Failed to upload image", []response.ErrorResponse{

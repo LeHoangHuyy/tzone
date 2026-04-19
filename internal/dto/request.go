@@ -77,7 +77,7 @@ type UpdateBrandRequest struct {
 type CreateDeviceRequest struct {
 	BrandID        string               `json:"brand_id" binding:"required"`
 	ModelName      string               `json:"model_name" binding:"required,min=1,max=100"`
-	ImageUrl       string               `json:"imageUrl" binding:"required,min=1,max=100"`
+	ImageUrl       string               `json:"imageUrl" binding:"required,min=1,max=512"`
 	Specifications model.Specifications `json:"specifications"`
 }
 
@@ -85,7 +85,7 @@ type CreateDeviceRequest struct {
 type UpdateDeviceRequest struct {
 	BrandID        string               `json:"brand_id" binding:"required"`
 	ModelName      string               `json:"model_name" binding:"required,min=1,max=100"`
-	ImageUrl       string               `json:"imageUrl" binding:"required,min=1,max=100"`
+	ImageUrl       string               `json:"imageUrl" binding:"required,min=1,max=512"`
 	Specifications model.Specifications `json:"specifications"`
 }
 
