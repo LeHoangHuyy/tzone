@@ -32,6 +32,372 @@
 
 ---
 
+## 🏗️ Kiến Trúc Toàn Diện
+
+### Sơ Đồ Tổng Quan Hệ Thống
+
+```mermaid
+graph TB
+    subgraph Client["🖥️ Client Layer"]
+        Web["React/Vite Frontend<br/>3000"]
+        UI["UI Components<br/>Theme + Dark/Light"]
+        Ctx["Contexts<br/>Auth/Favorites/Theme"]
+    end
+
+    subgraph API["🌐 API Gateway"]
+        Gin["Gin HTTP Server<br/>8080"]
+        Auth["JWT Auth<br/>Rate Limit"]
+        RBAC["RBAC Middleware"]
+    end
+
+    subgraph Handler["📨 Delivery Layer - Handlers"]
+        BrandH["Brand Handler"]
+        DeviceH["Device Handler"]
+        AuthH["Auth Handler"]
+        FavH["Favorite Handler"]
+        CommonH["Common Handler"]
+    end
+
+    subgraph Service["🧠 Service Layer - Business Logic"]
+        AuthSvc["Auth Service<br/>JWT + OTP"]
+        BrandSvc["Brand Service"]
+        DeviceSvc["Device Service<br/>Finder"]
+        FavSvc["Favorite Service<br/>Sync Logic"]
+        PermSvc["Permission Service"]
+    end
+
+    subgraph Repository["🗄️ Repository Layer - Data Access"]
+        UserRepo["User Repository"]
+        BrandRepo["Brand Repository<br/>MongoDB"]
+        DeviceRepo["Device Repository<br/>MongoDB"]
+        FavRepo["Favorite Repository<br/>PostgreSQL"]
+        TokenRepo["Token Repository<br/>PostgreSQL"]
+    end
+
+    subgraph DB["💾 Database Layer"]
+        PG["PostgreSQL<br/>Users, Auth,<br/>Favorites, Tokens"]
+        Mongo["MongoDB<br/>Brands, Devices,<br/>Specifications"]
+    end
+
+    subgraph External["🔗 External Services"]
+        MinIO["MinIO<br/>Object Storage<br/>Device Images"]
+        SMTP["SMTP<br/>Email Service<br/>OTP Codes"]
+        JWT["JWT<br/>Token Generation"]
+    end
+
+    Client -->|HTTP| API
+    API --> Handler
+    Handler --> Service
+    Service --> Repository
+    Repository -->|SQL| DB
+    Repository -->|Query| DB
+    Service -->|Upload| External
+    Service -->|Email OTP| External
+    AuthSvc -->|Gen Token| External
+    
+    style Client fill:#e1f5ff
+    style API fill:#fff3e0
+    style Handler fill:#f3e5f5
+    style Service fill:#e8f5e9
+    style Repository fill:#fce4ec
+    style DB fill:#ede7f6
+    style External fill:#fff9c4
+```
+
+### Luồng Request Chi Tiết
+
+```mermaid
+sequenceDiagram
+    participant Browser as 🌐 Browser
+    participant FE as React Frontend
+    participant API as 🚀 Gin API
+    participant Auth as 🔐 Auth Handler
+    participant AuthSvc as Auth Service
+    participant UserRepo as User Repo
+    participant PG as PostgreSQL
+    participant JWT as JWT Module
+
+    Browser->>FE: User clicks Login
+    FE->>API: POST /auth/login {email, password}
+    
+    API->>Auth: Validate request
+    Auth->>AuthSvc: Login(email, password)
+    
+    AuthSvc->>UserRepo: FindByEmailWithRole(email)
+    UserRepo->>PG: Query users table
+    PG-->>UserRepo: Return user + role
+    
+    AuthSvc->>AuthSvc: Compare password hash
+    AuthSvc->>JWT: GenerateTokenPair(userID)
+    JWT-->>AuthSvc: accessToken, refreshToken
+    
+    AuthSvc->>UserRepo: SaveRefreshToken()
+    UserRepo->>PG: INSERT into tokens
+    
+    AuthSvc-->>Auth: Return tokens + user
+    Auth-->>API: Success response
+    
+    API-->>FE: {accessToken, user, role}
+    FE->>FE: Store in localStorage
+    FE->>FE: Load Favorites + Theme
+    Browser-->>Browser: Redirect to home
+```
+
+### Kiến Trúc Layer-wise
+
+```mermaid
+graph LR
+    subgraph Delivery
+        Handler["Handler<br/>Request Parsing<br/>Validation"]
+    end
+
+    subgraph Business["Service<br/>Logic"]
+        Logic["Business Rules<br/>OTP Generation<br/>Favorite Sync"]
+    end
+
+    subgraph Data["Repository<br/>Data Access"]
+        Query["Query Building<br/>Error Handling"]
+    end
+
+    subgraph DB["Database"]
+        SQLite["SQL/NoSQL"]
+    end
+
+    HTTP["HTTP Request"]
+    HTTP -->|1. Parse| Delivery
+    Delivery -->|2. Delegate| Business
+    Business -->|3. Access| Data
+    Data -->|4. Query| DB
+    DB -->|5. Return| Data
+    Data -->|6. Aggregate| Business
+    Business -->|7. Format| Delivery
+    Delivery -->|8. Respond| HTTP
+
+    style Delivery fill:#ffe0b2
+    style Business fill:#c8e6c9
+    style Data fill:#f8bbd0
+    style DB fill:#b3e5fc
+```
+
+### Entity Relationships (ERD)
+
+```mermaid
+erDiagram
+    USERS ||--o{ REFRESH_TOKENS : has
+    USERS ||--o{ FAVORITES : has
+    USERS ||--o{ USER_ROLES : has
+
+    USERS {
+        uuid id PK
+        string email UK
+        string password_hash
+        timestamp created_at
+    }
+
+    REFRESH_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        timestamp expires_at
+        timestamp created_at
+    }
+
+    FAVORITES {
+        int id PK
+        uuid user_id FK
+        string device_id FK
+        timestamp created_at
+    }
+
+    BRANDS {
+        objectId _id PK
+        string brand_name
+        array devices
+    }
+
+    DEVICES {
+        objectId _id PK
+        string model_name
+        string imageUrl
+        object specifications
+    }
+
+    ROLES {
+        int id PK
+        string name UK
+    }
+
+    USER_ROLES {
+        uuid user_id FK
+        int role_id FK
+    }
+```
+
+### Data Flow: Guest → Login → Favorites Sync
+
+```mermaid
+flowchart TD
+    Start["🌐 User Visits Site"]
+    GuestFav["💾 Add to Favorites<br/>localStorage:'favorites'"]
+    LocalStore["📱 Store in<br/>Browser Memory"]
+    
+    Login["🔐 Click Login Button"]
+    Input["📝 Enter Email/Password"]
+    Submit["✅ Submit Form"]
+    
+    APIAuth["🚀 POST /auth/login"]
+    DBCheck["🔍 Query PostgreSQL<br/>Check user exists"]
+    PassMatch["🔑 Verify password hash"]
+    
+    Decision1{Match?}
+    ErrorLogin["❌ Invalid credentials"]
+    
+    GenToken["🎟️ Generate JWT<br/>accessToken, refreshToken"]
+    SaveToken["💾 Save refreshToken<br/>to PostgreSQL"]
+    
+    FELoad["🎨 FE Detects<br/>isAuthenticated"]
+    ReadLocal["📖 Read localStorage<br/>favorites"]
+    
+    Decision2{Has Guest<br/>Favorites?}
+    GetServer["📡 GET /favorites<br/>from server"]
+    
+    SyncAPI["📤 POST /api/v1/favorites/sync<br/>{ device_ids: [...] }"]
+    ValidateDevice["✅ Check each device<br/>exists in MongoDB"]
+    DeDupe["🔄 Remove duplicates<br/>via DB unique constraint"]
+    Insert["💾 INSERT new favorites<br/>to PostgreSQL"]
+    
+    ClearLocal["🗑️ localStorage.removeItem<br/>('favorites')"]
+    FinalList["📋 Return synced list<br/>device_ids: [...]"]
+    
+    UIUpdate["🎨 FE Updates UI<br/>Hearts filled on devices"]
+    Success["✅ Sync Complete"]
+    
+    Start --> GuestFav --> LocalStore
+    LocalStore -.->|Later| Login
+    
+    Login --> Input --> Submit
+    Submit --> APIAuth
+    
+    APIAuth --> DBCheck --> PassMatch
+    PassMatch --> Decision1
+    Decision1 -->|No| ErrorLogin
+    Decision1 -->|Yes| GenToken
+    
+    GenToken --> SaveToken
+    SaveToken -->|Return tokens| FELoad
+    
+    FELoad --> ReadLocal
+    ReadLocal --> Decision2
+    Decision2 -->|No| GetServer
+    Decision2 -->|Yes| SyncAPI
+    
+    SyncAPI --> ValidateDevice
+    ValidateDevice --> DeDupe
+    DeDupe --> Insert
+    
+    Insert --> ClearLocal
+    ClearLocal --> FinalList
+    FinalList --> UIUpdate
+    UIUpdate --> Success
+    
+    style Start fill:#e1f5ff
+    style GuestFav fill:#fff9c4
+    style Login fill:#ffe0b2
+    style APIAuth fill:#f8bbd0
+    style GenToken fill:#c8e6c9
+    style SyncAPI fill:#f3e5f5
+    style Success fill:#c8e6c9
+```
+
+### Frontend State Management
+
+```mermaid
+graph TB
+    App["App Root<br/>ThemeProvider<br/>AuthProvider<br/>FavoritesProvider"]
+    
+    Theme["🎨 ThemeContext<br/>theme: dark/light<br/>toggleTheme()"]
+    
+    Auth["🔐 AuthContext<br/>user, token<br/>isAuthenticated<br/>login, logout"]
+    
+    Fav["❤️ FavoritesContext<br/>favoriteIds: string array<br/>isFavorite(id)<br/>toggleFavorite(id)"]
+    
+    Pages["📄 Pages"]
+    Device["Device Detail"]
+    Brand["Brand List"]
+    Finder["Device Finder"]
+    Favorites["Favorites Page"]
+    
+    LocalStorage["📱 localStorage<br/>theme<br/>favorites<br/>access_token<br/>user"]
+    
+    API["🚀 API Calls<br/>GET /favorites<br/>POST /favorites/sync<br/>DELETE /favorites/:id"]
+    
+    App -->|wrap| Theme
+    App -->|wrap| Auth
+    App -->|wrap| Fav
+    
+    Theme -->|useTheme| Pages
+    Auth -->|useAuth| Pages
+    Fav -->|useFavorites| Pages
+    
+    Pages --> Device
+    Pages --> Brand
+    Pages --> Finder
+    Pages --> Favorites
+    
+    Fav -->|persist| LocalStorage
+    Auth -->|persist| LocalStorage
+    Theme -->|persist| LocalStorage
+    
+    Fav -->|sync on login| API
+    API -->|update| Fav
+    
+    style App fill:#e1f5ff
+    style Theme fill:#fff9c4
+    style Auth fill:#ffe0b2
+    style Fav fill:#f8bbd0
+    style LocalStorage fill:#c8e6c9
+    style API fill:#f3e5f5
+```
+
+### Deployment Architecture
+
+```mermaid
+graph LR
+    Client["🖥️ Client<br/>Browser"]
+    
+    CDN["📦 CDN<br/>dist/ files<br/>Static assets"]
+    
+    LB["⚖️ Load Balancer<br/>nginx/reverse proxy"]
+    
+    subgraph Container["🐳 Docker Container"]
+        API["Gin API<br/>Port 8080"]
+        Worker["Background Jobs<br/>OTP Cleanup"]
+    end
+    
+    PG["🐘 PostgreSQL<br/>Port 5432"]
+    Mongo["🍃 MongoDB<br/>Port 27017"]
+    MinIO["📦 MinIO<br/>Port 9000"]
+    SMTP["📧 SMTP<br/>Email Service"]
+    
+    Client -->|HTTP/HTTPS| CDN
+    Client -->|API calls| LB
+    LB -->|Route| Container
+    
+    Container -->|Query| PG
+    Container -->|Query| Mongo
+    Container -->|Upload/Get| MinIO
+    Container -->|Send OTP| SMTP
+    
+    style Client fill:#e1f5ff
+    style CDN fill:#fff9c4
+    style LB fill:#ffe0b2
+    style Container fill:#f8bbd0
+    style PG fill:#e0f2f1
+    style Mongo fill:#c8e6c9
+    style MinIO fill:#f3e5f5
+```
+
+---
+
 ## 🎯 Giới Thiệu
 
 TZone là một nền tảng **REST API** hiện đại được xây dựng bằng **Go**, sử dụng **framework Gin** và hỗ trợ nhiều loại cơ sở dữ liệu (**MongoDB** và **Supabase**). Ứng dụng tuân theo **Clean Architecture** để đảm bảo khả năng mở rộng, dễ bảo trì và hiệu suất cao.
