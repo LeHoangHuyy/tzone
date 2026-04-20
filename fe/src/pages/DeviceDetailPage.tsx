@@ -4,6 +4,7 @@ import { devicesApi } from '../api/devices';
 import type { Device } from '../types';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { resolveDeviceImageUrl } from '../utils/resolveDeviceImageUrl';
+import { pushRecentlyViewedId } from '../utils/recentlyViewed';
 import { useFavorites } from '../contexts/FavoritesContext';
 import {
   ChevronRight, Smartphone, Wifi, Battery, Cpu, Monitor,
@@ -24,6 +25,12 @@ export default function DeviceDetailPage() {
       .catch(() => setDevice(null))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (device?.id) {
+      pushRecentlyViewedId(device.id);
+    }
+  }, [device?.id]);
 
   if (loading) return <LoadingSpinner text="Loading device..." />;
 

@@ -6,10 +6,13 @@ import type { Brand, Device } from '../types';
 import { ArrowRight, Smartphone, Layers, BarChart3, Zap, ChevronRight } from 'lucide-react';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { resolveDeviceImageUrl } from '../utils/resolveDeviceImageUrl';
+import { getRecentlyViewedIds } from '../utils/recentlyViewed';
 
 export default function HomePage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [recentDevices, setRecentDevices] = useState<Device[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,6 +31,49 @@ export default function HomePage() {
       }
     };
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchRecentlyViewed = async () => {
+      const ids = getRecentlyViewedIds().slice(0, 5);
+      if (ids.length === 0) {
+        if (active) {
+          setRecentDevices([]);
+          setRecentLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const results = await Promise.allSettled(ids.map((deviceId) => devicesApi.getById(deviceId)));
+        if (!active) return;
+
+        const byId = new Map<string, Device>();
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            const item = result.value.data.data;
+            if (item?.id) {
+              byId.set(item.id, item);
+            }
+          }
+        });
+
+        const ordered = ids.map((deviceId) => byId.get(deviceId)).filter((item): item is Device => Boolean(item));
+        setRecentDevices(ordered);
+      } finally {
+        if (active) {
+          setRecentLoading(false);
+        }
+      }
+    };
+
+    fetchRecentlyViewed();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
@@ -112,7 +158,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* GSMArena-like stream + sidebar */}
+      {/* stream + sidebar */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 pb-24">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8">
@@ -120,7 +166,7 @@ export default function HomePage() {
               <div className="px-5 py-4 border-b border-border bg-surface-light/40 flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-text-primary">Latest Devices</h2>
-                  <p className="text-xs text-text-muted mt-0.5">GSMArena-style quick browsing list</p>
+                  <p className="text-xs text-text-muted mt-0.5">Quick browsing list</p>
                 </div>
                 <Link
                   to="/finder"
@@ -187,6 +233,49 @@ export default function HomePage() {
           </div>
 
           <aside className="lg:col-span-4 space-y-5">
+            <div className="glass rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border bg-surface-light/40">
+                <h2 className="text-sm font-semibold text-text-primary">Recently Viewed</h2>
+              </div>
+
+              {recentLoading ? (
+                <div className="p-4">
+                  <LoadingSpinner text="Loading recently viewed..." />
+                </div>
+              ) : recentDevices.length === 0 ? (
+                <div className="p-4 text-sm text-text-secondary">No recently viewed devices yet.</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {recentDevices.map((device) => (
+                    <Link
+                      key={device.id}
+                      to={`/devices/${device.id}`}
+                      className="px-4 py-3 flex items-center gap-3 hover:bg-surface-light/40 transition-colors"
+                    >
+                      <div className="w-11 h-11 rounded-lg bg-surface-light border border-border/60 flex items-center justify-center overflow-hidden shrink-0">
+                        {device.imageUrl ? (
+                          <img
+                            src={resolveDeviceImageUrl(device.imageUrl)}
+                            alt={device.model_name}
+                            className="max-h-full w-auto object-contain"
+                          />
+                        ) : (
+                          <Smartphone size={16} className="text-text-muted" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-text-primary truncate">{device.model_name}</p>
+                        <p className="text-xs text-text-muted truncate">
+                          {device.specifications?.platform?.chipset?.split('(')[0].trim() || 'Device'}
+                        </p>
+                      </div>
+                      <ChevronRight size={14} className="text-text-muted" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="glass rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-surface-light/40 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-text-primary">Brand Directory</h2>
