@@ -92,6 +92,14 @@ type ChangePasswordRequest struct {
 	OTP         string `json:"otp" binding:"required,len=6"`
 }
 
+type AddFavoriteRequest struct {
+	DeviceID string `json:"device_id" binding:"required"`
+}
+
+type SyncFavoritesRequest struct {
+	DeviceIDs []string `json:"device_ids" binding:"required"`
+}
+
 // CreateBrandRequest represents the request body for creating a new brand
 type CreateBrandRequest struct {
 	Name string `json:"brand_name" binding:"required,min=1,max=100"`

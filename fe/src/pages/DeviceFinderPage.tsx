@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, SlidersHorizontal, Smartphone } from 'lucide-react';
+import { Heart, Search, SlidersHorizontal, Smartphone } from 'lucide-react';
 import { devicesApi } from '../api/devices';
 import { brandsApi } from '../api/brands';
 import type { Brand, Device, DeviceFinderParams, PaginationMeta } from '../types';
@@ -9,6 +9,7 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Pagination from '../components/ui/Pagination';
 import { resolveDeviceImageUrl } from '../utils/resolveDeviceImageUrl';
 import { finderDropdownOptions } from '../constants/finderDropdownOptions';
+import { useFavorites } from '../contexts/FavoritesContext';
 
 const DEFAULT_LIMIT = 12;
 
@@ -30,6 +31,7 @@ const parsePositiveInt = (value: string | null, fallback: number) => {
 };
 
 export default function DeviceFinderPage() {
+  const { isFavorite, toggleFavorite } = useFavorites();
   const [searchParams, setSearchParams] = useSearchParams();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -231,8 +233,24 @@ export default function DeviceFinderPage() {
                   <Link
                     key={device.id}
                     to={`/devices/${device.id}`}
-                    className="py-4 first:pt-0 last:pb-0 flex gap-4 hover:bg-surface-light/40 transition-colors rounded-lg px-2"
+                    className="py-4 first:pt-0 last:pb-0 flex gap-4 hover:bg-surface-light/40 transition-colors rounded-lg px-2 relative"
                   >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleFavorite(device.id);
+                      }}
+                      className={`absolute right-2 top-3 p-2 rounded-full border transition-colors ${
+                        isFavorite(device.id)
+                          ? 'text-danger border-danger/40 bg-danger/10'
+                          : 'text-text-muted border-border hover:text-danger hover:bg-surface-light'
+                      }`}
+                      aria-label="Toggle favorite"
+                    >
+                      <Heart size={14} className={isFavorite(device.id) ? 'fill-danger' : ''} />
+                    </button>
                     <div className="w-24 h-24 rounded-xl bg-surface-light flex items-center justify-center overflow-hidden shrink-0">
                       {device.imageUrl ? (
                         <img

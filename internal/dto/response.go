@@ -39,3 +39,7 @@ type DeviceListResponse struct {
 	Total      int              `json:"total"`
 	Pagination PaginationMeta   `json:"pagination"`
 }
+
+type FavoriteListResponse struct {
+	DeviceIDs []string `json:"device_ids"`
+}

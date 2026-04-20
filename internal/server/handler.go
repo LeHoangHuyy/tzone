@@ -21,6 +21,7 @@ func (s *Server) MapHandlers() error {
 	s.db.AutoMigrate(
 		&model.User{},
 		&model.RefreshToken{},
+		&model.Favorite{},
 		&model.Role{},
 		&model.UserRole{},
 		&model.Action{},
@@ -35,6 +36,7 @@ func (s *Server) MapHandlers() error {
 	// Init repository
 	userRepo := repository.NewUserRepository(s.db)
 	tokenRepo := repository.NewRefreshTokenRepository(s.db)
+	favoriteRepo := repository.NewFavoriteRepository(s.db)
 	permissionRepo := repository.NewPermissionRepository(s.db)
 
 	brandRepo := repository.NewBrandRepository()
@@ -52,6 +54,7 @@ func (s *Server) MapHandlers() error {
 	// Init service
 	brandService := service.NewBrandService(brandRepo)
 	deviceService := service.NewDeviceService(deviceRepo)
+	favoriteService := service.NewFavoriteService(favoriteRepo, deviceRepo)
 	permissionService := service.NewPermissionService(permissionRepo)
 	log.Printf("✅ Services initialized")
 
@@ -60,6 +63,7 @@ func (s *Server) MapHandlers() error {
 	frontendHandler := handler.NewFrontendHandler()
 	brandHandler := handler.NewBrandHandler(brandService)
 	deviceHandler := handler.NewDeviceHandler(deviceService)
+	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	authHandler := handler.NewAuthHandler(authService)
 	log.Printf("✅ Handlers initialized")
 
@@ -68,6 +72,7 @@ func (s *Server) MapHandlers() error {
 	route.MapFrontendRoutes(s.r, frontendHandler, permissionService)
 	route.MapBrandRoutes(s.r, brandHandler, permissionService)
 	route.MapDeviceRoutes(s.r, deviceHandler, permissionService)
+	route.MapFavoriteRoutes(s.r, favoriteHandler)
 	route.MapAuthRoutes(s.r, authHandler)
 	log.Printf("✅ Routes initialized")
 

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { FavoritesProvider } from './contexts/FavoritesContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/layout/Layout';
 import AdminLayout from './components/layout/AdminLayout';
@@ -17,6 +18,7 @@ import BrandDetailPage from './pages/BrandDetailPage';
 import DeviceDetailPage from './pages/DeviceDetailPage';
 import ComparePage from './pages/ComparePage';
 import DeviceFinderPage from './pages/DeviceFinderPage';
+import FavoritesPage from './pages/FavoritesPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import BrandManagePage from './pages/admin/BrandManagePage';
 import DeviceManagePage from './pages/admin/DeviceManagePage';
@@ -25,6 +27,7 @@ function AppContent() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <FavoritesProvider>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -64,6 +67,7 @@ function AppContent() {
             <Route path="/devices/:id" element={<DeviceDetailPage />} />
             <Route path="/finder" element={<DeviceFinderPage />} />
             <Route path="/compare" element={<ComparePage />} />
+            <Route path="/favorites" element={<FavoritesPage />} />
           </Route>
 
         {/* Admin routes with admin layout */}
@@ -79,6 +83,7 @@ function AppContent() {
           <Route path="/admin/devices" element={<DeviceManagePage />} />
         </Route>
         </Routes>
+        </FavoritesProvider>
       </AuthProvider>
     </BrowserRouter>
   );

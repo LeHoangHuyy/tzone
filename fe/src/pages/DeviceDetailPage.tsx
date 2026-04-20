@@ -4,13 +4,15 @@ import { devicesApi } from '../api/devices';
 import type { Device } from '../types';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { resolveDeviceImageUrl } from '../utils/resolveDeviceImageUrl';
+import { useFavorites } from '../contexts/FavoritesContext';
 import {
   ChevronRight, Smartphone, Wifi, Battery, Cpu, Monitor,
-  Camera, Volume2, Ruler, Fingerprint, Info, ArrowLeft, BarChart3
+  Camera, Volume2, Ruler, Fingerprint, Info, ArrowLeft, BarChart3, Heart
 } from 'lucide-react';
 
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const [device, setDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -212,13 +214,27 @@ export default function DeviceDetailPage() {
             </div>
 
             <div className="mt-6">
-              <Link
-                to={`/compare?device=${id}`}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white btn-gradient"
-              >
-                <BarChart3 size={16} />
-                Add to Compare
-              </Link>
+              <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                <Link
+                  to={`/compare?device=${id}`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white btn-gradient"
+                >
+                  <BarChart3 size={16} />
+                  Add to Compare
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(device.id)}
+                  className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                    isFavorite(device.id)
+                      ? 'text-danger border-danger/40 bg-danger/10'
+                      : 'text-text-secondary border-border hover:text-text-primary hover:bg-surface-light'
+                  }`}
+                >
+                  <Heart size={16} className={isFavorite(device.id) ? 'fill-danger' : ''} />
+                  {isFavorite(device.id) ? 'Favorited' : 'Add to favorites'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

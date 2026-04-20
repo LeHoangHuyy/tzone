@@ -5,8 +5,9 @@ import { devicesApi } from '../api/devices';
 import type { Brand, Device, PaginationMeta } from '../types';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Pagination from '../components/ui/Pagination';
-import { ChevronRight, Smartphone, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Smartphone, ArrowLeft, Heart } from 'lucide-react';
 import { resolveDeviceImageUrl } from '../utils/resolveDeviceImageUrl';
+import { useFavorites } from '../contexts/FavoritesContext';
 
 const DEFAULT_LIMIT = 12;
 
@@ -18,6 +19,7 @@ const parsePage = (value: string | null) => {
 
 export default function BrandDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const [searchParams, setSearchParams] = useSearchParams();
   const [brand, setBrand] = useState<Brand | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -160,9 +162,25 @@ export default function BrandDetailPage() {
             <Link
               key={device.id}
               to={`/devices/${device.id}`}
-              className="glass rounded-2xl overflow-hidden card-hover group animate-fadeIn"
+              className="glass rounded-2xl overflow-hidden card-hover group animate-fadeIn relative"
               style={{ animationDelay: `${i * 0.05}s`, opacity: 0 }}
             >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleFavorite(device.id);
+                }}
+                className={`absolute top-3 right-3 z-10 p-2 rounded-full border backdrop-blur-sm transition-colors ${
+                  isFavorite(device.id)
+                    ? 'text-danger border-danger/40 bg-danger/15'
+                    : 'text-text-muted border-border bg-surface/60 hover:text-danger'
+                }`}
+                aria-label="Toggle favorite"
+              >
+                <Heart size={14} className={isFavorite(device.id) ? 'fill-danger' : ''} />
+              </button>
               <div className="aspect-square bg-gradient-to-br from-surface-lighter/50 to-surface-light flex items-center justify-center p-6 overflow-hidden">
                 {device.imageUrl ? (
                   <img

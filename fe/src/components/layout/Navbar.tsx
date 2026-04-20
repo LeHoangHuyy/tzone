@@ -19,6 +19,7 @@ export default function Navbar() {
     { to: '/brands', label: 'Brands' },
     { to: '/finder', label: 'Finder' },
     { to: '/compare', label: 'Compare' },
+    { to: '/favorites', label: 'Favorites' },
   ];
 
   const isActive = (path: string) => location.pathname === path;

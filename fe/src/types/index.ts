@@ -147,6 +147,10 @@ export interface DeviceListResponse {
   pagination: PaginationMeta;
 }
 
+export interface FavoriteListResponse {
+  device_ids: string[];
+}
+
 export interface DeviceFinderParams {
   brand_id?: string;
   os?: string;
@@ -227,3 +231,12 @@ export interface UpdateDeviceRequest {
   image?: File;
   specifications: Specifications;
 }
+
+export interface AddFavoriteRequest {
+  device_id: string;
+}
+
+export interface SyncFavoritesRequest {
+  device_ids: string[];
+}
+
