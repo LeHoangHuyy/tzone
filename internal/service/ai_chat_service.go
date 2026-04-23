@@ -23,6 +23,7 @@ import (
 type AIChatService struct {
 	apiKey        string
 	model         string
+	youtubeAPIKey string
 	publicBaseURL string
 	bucket        string
 	httpClient    *http.Client
@@ -174,6 +175,7 @@ func NewAIChatService(cfg configuration.AIConfig) (*AIChatService, error) {
 	return &AIChatService{
 		apiKey:        strings.TrimSpace(cfg.GeminiAPIKey),
 		model:         strings.TrimSpace(cfg.GeminiModel),
+		youtubeAPIKey: strings.TrimSpace(cfg.YouTubeAPIKey),
 		publicBaseURL: strings.TrimSpace(cfg.MinioPublicBaseURL),
 		bucket:        strings.TrimSpace(cfg.MinioBucket),
 		httpClient:    &http.Client{Timeout: 20 * time.Second},
@@ -372,51 +374,87 @@ func (s *AIChatService) FindVideoReviews(ctx context.Context, req dto.AIVideoRev
 
 	fallbackVideos := buildSingleYouTubeFallbackVideo(deviceName)
 
-	if s.apiKey == "" {
+	if s.youtubeAPIKey == "" {
 		return &dto.AIVideoReviewResponse{
-			Reply:  "I could not fetch a direct review video right now because the AI service is not configured. Here is one YouTube search link you can open now.",
+			Reply:  "I could not fetch a direct review video right now. Here is one YouTube search link you can open now.",
 			Videos: fallbackVideos,
 		}, nil
 	}
 
-	structured, err := s.askGeminiVideoReviews(ctx, deviceName, req.Limit)
+	query := deviceName + " review"
+	videos, err := s.fetchYouTubeVideos(ctx, query, req.Limit)
 	if err != nil {
-		var geminiErr *GeminiAPIError
-		if errors.As(err, &geminiErr) {
-			switch geminiErr.StatusCode {
-			case http.StatusTooManyRequests, http.StatusUnauthorized, http.StatusForbidden:
-				return nil, geminiErr
-			}
-		}
-		log.Printf("⚠️ Gemini video review call failed: %v", err)
+		log.Printf("⚠️ YouTube API call failed: %v", err)
 		return &dto.AIVideoReviewResponse{
 			Reply:  "I could not fetch a direct review video at the moment. Here is one YouTube search link you can open now.",
 			Videos: fallbackVideos,
 		}, nil
 	}
 
-	videos := make([]dto.AIVideoReview, 0)
-	if structured != nil && normalizeYouTubeURL(structured.YoutubeUrl) != "" {
-		videoTitle := strings.TrimSpace(structured.VideoTitle)
-		if videoTitle == "" {
-			videoTitle = "YouTube review"
-		}
-		videos = append(videos, dto.AIVideoReview{
-			Title: videoTitle,
-			URL:   normalizeYouTubeURL(structured.YoutubeUrl),
-		})
-	}
-
 	reply := "Here is a YouTube review link for this device."
-	if structured != nil && structured.PhoneName != "" {
-		reply = fmt.Sprintf("Found a YouTube review for %s", structured.PhoneName)
-	}
 	if len(videos) == 0 {
 		videos = fallbackVideos
 		reply = "I could not verify a direct review video right now. Here is one YouTube search link for this device."
+	} else {
+		reply = fmt.Sprintf("Found a YouTube review for %s", deviceName)
 	}
 
 	return &dto.AIVideoReviewResponse{Reply: reply, Videos: videos}, nil
+}
+
+func (s *AIChatService) fetchYouTubeVideos(ctx context.Context, query string, limit int) ([]dto.AIVideoReview, error) {
+	if s.youtubeAPIKey == "" {
+		return nil, fmt.Errorf("youtube API key is missing")
+	}
+
+	if limit <= 0 {
+		limit = 1
+	}
+
+	searchURL := fmt.Sprintf("https://www.googleapis.com/youtube/v3/search?part=snippet&q=%s&type=video&maxResults=%d&key=%s", url.QueryEscape(query), limit, s.youtubeAPIKey)
+	
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create youtube request: %w", err)
+	}
+
+	res, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call youtube api: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		return nil, fmt.Errorf("youtube api returned status %d: %s", res.StatusCode, string(body))
+	}
+
+	var ytRes struct {
+		Items []struct {
+			Id struct {
+				VideoId string `json:"videoId"`
+			} `json:"id"`
+			Snippet struct {
+				Title string `json:"title"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&ytRes); err != nil {
+		return nil, fmt.Errorf("failed to decode youtube response: %w", err)
+	}
+
+	var videos []dto.AIVideoReview
+	for _, item := range ytRes.Items {
+		if item.Id.VideoId != "" {
+			videos = append(videos, dto.AIVideoReview{
+				Title: item.Snippet.Title,
+				URL:   "https://www.youtube.com/watch?v=" + item.Id.VideoId,
+			})
+		}
+	}
+
+	return videos, nil
 }
 
 func (s *AIChatService) buildFallbackReply(cards []dto.RecommendedDeviceCard) string {
@@ -580,72 +618,7 @@ User request: %s`, limit, strings.Join(catalogLines, "\n"), strings.TrimSpace(me
 	return nil, fmt.Errorf("failed to call gemini")
 }
 
-func (s *AIChatService) askGeminiVideoReviews(ctx context.Context, deviceName string, limit int) (*geminiVideoReply, error) {
-	modelsToTry := buildGeminiModelCandidates(s.model)
 
-	prompt := fmt.Sprintf(`Act as a technology data API. Search for the most popular and highly-rated YouTube review video for the smartphone: "%s".
-Return the result strictly as a valid JSON object with the following structure:
-{
-  "phoneName": "name of the phone",
-  "videoTitle": "exact title of the YouTube video",
-  "youtubeUrl": "valid youtube video link",
-  "channelName": "name of the reviewer/channel"
-}
-Do not return any conversational text outside of the JSON block.`, strings.TrimSpace(deviceName))
-
-	body := geminiRequest{
-		Contents: []geminiContent{{
-			Parts: []geminiPart{{Text: prompt}},
-		}},
-		GenerationConfig: geminiGenerationConfig{
-			Temperature:      0.2,
-			ResponseMimeType: "application/json",
-		},
-	}
-
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal gemini video request: %w", err)
-	}
-
-	var lastErr error
-	for idx, model := range modelsToTry {
-		resBody, err := s.callGeminiGenerateContent(ctx, model, payload)
-		if err != nil {
-			var geminiErr *GeminiAPIError
-			if errors.As(err, &geminiErr) && geminiErr.StatusCode == http.StatusNotFound && idx < len(modelsToTry)-1 {
-				log.Printf("⚠️ Gemini model %s not found for video reviews, retrying with fallback model", model)
-				lastErr = err
-				continue
-			}
-			return nil, err
-		}
-
-		var modelRes geminiResponse
-		if err := json.Unmarshal(resBody, &modelRes); err != nil {
-			return nil, fmt.Errorf("failed to parse gemini video response: %w", err)
-		}
-		if len(modelRes.Candidates) == 0 || len(modelRes.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("gemini video response has no content")
-		}
-
-		raw := strings.TrimSpace(modelRes.Candidates[0].Content.Parts[0].Text)
-		raw = trimCodeFence(raw)
-
-		var parsed geminiVideoReply
-		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-			return nil, fmt.Errorf("gemini returned invalid video JSON: %w", err)
-		}
-
-		return &parsed, nil
-	}
-
-	if lastErr != nil {
-		return nil, lastErr
-	}
-
-	return nil, fmt.Errorf("failed to call gemini for video reviews")
-}
 
 func buildGeminiModelCandidates(preferred string) []string {
 	fallbacks := []string{"gemini-2.0-flash", "gemini-1.5-flash"}
