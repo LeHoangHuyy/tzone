@@ -117,8 +117,10 @@ type geminiStructuredReply struct {
 }
 
 type geminiVideoReply struct {
-	Reply  string                `json:"reply"`
-	Videos []geminiVideoReplyRow `json:"videos"`
+	PhoneName   string `json:"phoneName"`
+	VideoTitle  string `json:"videoTitle"`
+	YoutubeUrl  string `json:"youtubeUrl"`
+	ChannelName string `json:"channelName"`
 }
 
 type geminiVideoReplyRow struct {
@@ -368,11 +370,11 @@ func (s *AIChatService) FindVideoReviews(ctx context.Context, req dto.AIVideoRev
 		return nil, fmt.Errorf("device_name is required")
 	}
 
-	fallbackVideos := buildYouTubeSearchFallbackVideos(deviceName, req.Limit)
+	fallbackVideos := buildSingleYouTubeFallbackVideo(deviceName)
 
 	if s.apiKey == "" {
 		return &dto.AIVideoReviewResponse{
-			Reply:  "I could not fetch direct review videos right now because the AI service is not configured. Here are YouTube search links for this device.",
+			Reply:  "I could not fetch a direct review video right now because the AI service is not configured. Here is one YouTube search link you can open now.",
 			Videos: fallbackVideos,
 		}, nil
 	}
@@ -388,21 +390,30 @@ func (s *AIChatService) FindVideoReviews(ctx context.Context, req dto.AIVideoRev
 		}
 		log.Printf("⚠️ Gemini video review call failed: %v", err)
 		return &dto.AIVideoReviewResponse{
-			Reply:  "I could not fetch direct review videos at the moment. Here are YouTube search links you can open now.",
+			Reply:  "I could not fetch a direct review video at the moment. Here is one YouTube search link you can open now.",
 			Videos: fallbackVideos,
 		}, nil
 	}
 
-	videos := sanitizeYouTubeVideos(structured.Videos, req.Limit)
-	reply := strings.TrimSpace(structured.Reply)
+	videos := make([]dto.AIVideoReview, 0)
+	if structured != nil && normalizeYouTubeURL(structured.YoutubeUrl) != "" {
+		videoTitle := strings.TrimSpace(structured.VideoTitle)
+		if videoTitle == "" {
+			videoTitle = "YouTube review"
+		}
+		videos = append(videos, dto.AIVideoReview{
+			Title: videoTitle,
+			URL:   normalizeYouTubeURL(structured.YoutubeUrl),
+		})
+	}
+
+	reply := "Here is a YouTube review link for this device."
+	if structured != nil && structured.PhoneName != "" {
+		reply = fmt.Sprintf("Found a YouTube review for %s", structured.PhoneName)
+	}
 	if len(videos) == 0 {
 		videos = fallbackVideos
-		if reply == "" {
-			reply = "I could not verify direct review videos right now. Here are YouTube search links for this device."
-		}
-	}
-	if reply == "" {
-		reply = "Here are YouTube review links for this device."
+		reply = "I could not verify a direct review video right now. Here is one YouTube search link for this device."
 	}
 
 	return &dto.AIVideoReviewResponse{Reply: reply, Videos: videos}, nil
@@ -572,15 +583,15 @@ User request: %s`, limit, strings.Join(catalogLines, "\n"), strings.TrimSpace(me
 func (s *AIChatService) askGeminiVideoReviews(ctx context.Context, deviceName string, limit int) (*geminiVideoReply, error) {
 	modelsToTry := buildGeminiModelCandidates(s.model)
 
-	prompt := fmt.Sprintf(`Find YouTube video review links for this phone: %s
-Return ONLY valid JSON with this schema:
-{"reply":"string","videos":[{"title":"string","url":"https://..."}]}
-Rules:
-- reply must be concise and in English.
-- videos length must be at most %d.
-- url must be a YouTube link only (youtube.com or youtu.be).
-- Include only review-related videos for this exact device name.
-- If unsure, return an empty videos array.`, strings.TrimSpace(deviceName), limit)
+	prompt := fmt.Sprintf(`Act as a technology data API. Search for the most popular and highly-rated YouTube review video for the smartphone: "%s".
+Return the result strictly as a valid JSON object with the following structure:
+{
+  "phoneName": "name of the phone",
+  "videoTitle": "exact title of the YouTube video",
+  "youtubeUrl": "valid youtube video link",
+  "channelName": "name of the reviewer/channel"
+}
+Do not return any conversational text outside of the JSON block.`, strings.TrimSpace(deviceName))
 
 	body := geminiRequest{
 		Contents: []geminiContent{{
@@ -814,35 +825,16 @@ func toCard(device catalogDevice) dto.RecommendedDeviceCard {
 	}
 }
 
-func buildYouTubeSearchFallbackVideos(deviceName string, limit int) []dto.AIVideoReview {
-	if limit <= 0 {
-		limit = 3
+func buildSingleYouTubeFallbackVideo(deviceName string) []dto.AIVideoReview {
+	query := strings.TrimSpace(deviceName)
+	if query == "" {
+		query = "phone review"
+	} else {
+		query = query + " review"
 	}
 
-	topics := []struct {
-		titleSuffix string
-		querySuffix string
-	}{
-		{titleSuffix: "Video Reviews", querySuffix: "review"},
-		{titleSuffix: "Camera Review", querySuffix: "camera review"},
-		{titleSuffix: "Battery Test", querySuffix: "battery test"},
-		{titleSuffix: "Gaming Test", querySuffix: "gaming test"},
-	}
-
-	results := make([]dto.AIVideoReview, 0, limit)
-	for _, topic := range topics {
-		if len(results) >= limit {
-			break
-		}
-		query := strings.TrimSpace(deviceName + " " + topic.querySuffix)
-		if query == "" {
-			continue
-		}
-		results = append(results, dto.AIVideoReview{
-			Title: strings.TrimSpace(deviceName + " - " + topic.titleSuffix),
-			URL:   "https://www.youtube.com/results?search_query=" + url.QueryEscape(query),
-		})
-	}
-
-	return results
+	return []dto.AIVideoReview{{
+		Title: strings.TrimSpace(deviceName + " - YouTube review search"),
+		URL:   "https://www.youtube.com/results?search_query=" + url.QueryEscape(query),
+	}}
 }

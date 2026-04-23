@@ -93,3 +93,13 @@ func TestSanitizeYouTubeVideos(t *testing.T) {
 		t.Fatal("expected fallback title for empty title")
 	}
 }
+
+func TestBuildSingleYouTubeFallbackVideo(t *testing.T) {
+	videos := buildSingleYouTubeFallbackVideo("Samsung S24")
+	if len(videos) != 1 {
+		t.Fatalf("expected 1 fallback video, got %d", len(videos))
+	}
+	if videos[0].URL == "" || videos[0].Title == "" {
+		t.Fatal("expected fallback video to have title and url")
+	}
+}

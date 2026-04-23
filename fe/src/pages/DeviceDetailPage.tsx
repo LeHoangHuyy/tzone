@@ -11,6 +11,24 @@ import { resolveDeviceImageUrl } from '../utils/resolveDeviceImageUrl';
 import { pushRecentlyViewedId } from '../utils/recentlyViewed';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { useAuth } from '../contexts/AuthContext';
+
+function extractYouTubeId(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+
+    if (urlObj.hostname.includes('youtube.com')) {
+      return urlObj.searchParams.get('v');
+    } else if (urlObj.hostname.includes('youtu.be')) {
+      return urlObj.pathname.slice(1);
+    }
+  } catch {
+    // URL parsing failed, try regex
+  }
+
+  // Fallback regex matching
+  const regexMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+  return regexMatch ? regexMatch[1] : null;
+}
 import {
   ChevronRight,
   Smartphone,
@@ -29,6 +47,7 @@ import {
   PlayCircle,
   MessageSquare,
   Star,
+  ExternalLink,
 } from 'lucide-react';
 
 const COMMENT_PAGE_SIZE = 5;
@@ -150,7 +169,7 @@ export default function DeviceDetailPage() {
     setVideoLoading(true);
     setVideoError('');
 
-    aiApi.videoReviews({ device_name: deviceName, limit: 3 })
+    aiApi.videoReviews({ device_name: deviceName, limit: 1 })
       .then(({ data }) => {
         if (!active) return;
         const payload = data.data;
@@ -524,23 +543,75 @@ export default function DeviceDetailPage() {
             {videoError && <p className="text-sm text-danger mb-4">{videoError}</p>}
 
             {videoLoading ? (
-              <p className="text-sm text-text-muted">Loading video reviews...</p>
+              <p className="text-sm text-text-muted">Loading video review...</p>
             ) : videoReviews.length === 0 ? (
-              <p className="text-sm text-text-muted">No video reviews available yet.</p>
+              <p className="text-sm text-text-muted">No video review available yet.</p>
             ) : (
-              <div className="space-y-2">
-                {videoReviews.map((video, index) => (
-                  <a
-                    key={`${video.url}-${index}`}
-                    href={video.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="flex items-start gap-2 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-text-primary hover:border-primary/40 transition-colors"
-                  >
-                    <PlayCircle size={16} className="mt-0.5 text-primary shrink-0" />
-                    <span>{video.title}</span>
-                  </a>
-                ))}
+              <div className="space-y-4">
+                {videoReviews.map((video, index) => {
+                  const videoId = extractYouTubeId(video.url);
+                  const isYouTubeSearchLink = video.url.includes('search_query');
+                  
+                  if (isYouTubeSearchLink || !videoId) {
+                    return (
+                      <a
+                        key={`${video.url}-${index}`}
+                        href={video.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="group block rounded-xl border border-border bg-surface-light overflow-hidden hover:border-primary/40 transition-colors"
+                      >
+                        <div className="relative aspect-video bg-gradient-to-br from-surface-lighter to-surface-light flex items-center justify-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
+                              <PlayCircle size={36} className="text-primary" />
+                            </div>
+                            <span className="text-xs text-text-muted">Open on YouTube</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 p-4">
+                          <ExternalLink size={14} className="text-primary shrink-0" />
+                          <p className="text-sm font-medium text-text-primary truncate">{video.title}</p>
+                        </div>
+                      </a>
+                    );
+                  }
+                  
+                  return (
+                    <div key={`${video.url}-${index}`} className="rounded-xl border border-border bg-surface-light overflow-hidden">
+                      <div className="aspect-video overflow-hidden bg-black">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          src={`https://www.youtube.com/embed/${videoId}`}
+                          title={video.title}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="w-full h-full"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 p-4">
+                        <a
+                          href={video.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="text-sm font-medium text-text-primary hover:text-primary transition-colors truncate"
+                        >
+                          {video.title}
+                        </a>
+                        <a
+                          href={video.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="shrink-0 text-text-muted hover:text-primary transition-colors"
+                          title="Open on YouTube"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
