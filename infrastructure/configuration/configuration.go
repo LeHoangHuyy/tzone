@@ -50,6 +50,7 @@ type RedisConfig struct {
 type AIConfig struct {
 	GeminiAPIKey       string
 	GeminiModel        string
+	YouTubeAPIKey      string
 	PhoneDataPath      string
 	MinioPublicBaseURL string
 	MinioBucket        string
@@ -147,6 +148,13 @@ func LoadEnv() Config {
 		log.Printf("✅ GEMINI_MODEL: %s", geminiModel)
 	}
 
+	youtubeAPIKey := strings.TrimSpace(os.Getenv("YOUTUBE_API_KEY"))
+	if youtubeAPIKey == "" {
+		log.Println("⚠️ YOUTUBE_API_KEY not set - AI video reviews will fall back to search links")
+	} else {
+		log.Println("✅ YOUTUBE_API_KEY configured")
+	}
+
 	phoneDataPath := strings.TrimSpace(os.Getenv("AI_PHONE_DATA_PATH"))
 	if phoneDataPath == "" {
 		phoneDataPath = "phoneExample.json"
@@ -195,6 +203,7 @@ func LoadEnv() Config {
 		AI: AIConfig{
 			GeminiAPIKey:       geminiAPIKey,
 			GeminiModel:        geminiModel,
+			YouTubeAPIKey:      youtubeAPIKey,
 			PhoneDataPath:      phoneDataPath,
 			MinioPublicBaseURL: minioPublicBaseURL,
 			MinioBucket:        minioBucket,
